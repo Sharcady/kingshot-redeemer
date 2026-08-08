@@ -87,7 +87,7 @@ If the image directory is empty, the response contains `"image": null`.
 ### Register Player and Redeem Current Codes
 
 ```http
-GET /kingshot/register?playerId=123456789&kingdom=23
+GET /kingshot/register?playerId=123456789&kingdom=23&name=Arkadiy
 ```
 
 This saves the player to `players.json`, fetches current active gift codes, redeems them, and returns a Discord-friendly response.
@@ -96,7 +96,7 @@ Example response:
 
 ```json
 {
-  "message": "Redeemed 3 gift code(s) for player 123456789 in kingdom 23: CODE1, CODE2, CODE3.",
+  "message": "Processed 3 gift code(s) for Arkadiy (123456789) in kingdom 23. Redeemed: CODE1. Already redeemed: CODE2. Failed or invalid: CODE3.",
   "image": {
     "fileName": "success.png",
     "mediaType": "image/png",
@@ -115,7 +115,8 @@ Content-Type: application/json
 ```json
 {
   "playerId": 123456789,
-  "kingdom": 23
+  "kingdom": 23,
+  "name": "Arkadiy"
 }
 ```
 
@@ -133,7 +134,8 @@ Example response:
 [
   {
     "id": "123456789",
-    "kingdom": 23
+    "kingdom": 23,
+    "name": "Arkadiy"
   }
 ]
 ```

@@ -1,3 +1,7 @@
 package com.corgi.supremacy.kscorgiftcoderedeemer.domain
 
-data class Player(val id: String, val kingdom: Long)
+data class Player(
+    val id: String,
+    val kingdom: Long,
+    val name: String = id,
+)

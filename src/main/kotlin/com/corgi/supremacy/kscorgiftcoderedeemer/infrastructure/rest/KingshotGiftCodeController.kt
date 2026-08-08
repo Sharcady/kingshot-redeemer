@@ -28,8 +28,12 @@ class KingshotGiftCodeController(
 ) {
 
     @GetMapping("/register")
-    fun register(@RequestParam playerId: Long, @RequestParam kingdom: Long): RedeemGiftCodesResponse =
-        redeemAndBuildResponse(playerId, kingdom)
+    fun register(
+        @RequestParam playerId: Long,
+        @RequestParam kingdom: Long,
+        @RequestParam name: String,
+    ): RedeemGiftCodesResponse =
+        redeemAndBuildResponse(playerId, kingdom, name)
 
     @GetMapping("/removeplayer")
     fun removePlayer(@RequestParam playerId: Long): String =
@@ -45,12 +49,13 @@ class KingshotGiftCodeController(
 
     @PostMapping("/redeem-and-register")
     fun redeem(@RequestBody request: RedeemGiftCodesRequest): RedeemGiftCodesResponse =
-        redeemAndBuildResponse(request.playerId, request.kingdom)
+        redeemAndBuildResponse(request.playerId, request.kingdom, request.name)
 
-    private fun redeemAndBuildResponse(playerId: Long, kingdom: Long): RedeemGiftCodesResponse {
+    private fun redeemAndBuildResponse(playerId: Long, kingdom: Long, name: String): RedeemGiftCodesResponse {
         val result = registerAndRedeemGiftCodesUseCase.execute(
             playerId = playerId,
             kingdom = kingdom,
+            name = name,
         )
         val image = imageRepositoryPort.findRandom()
 
@@ -78,7 +83,7 @@ class KingshotGiftCodeController(
             .map { it.giftCode }
 
         return buildString {
-            append("Processed ${result.redemptionResults.size} gift code(s) for player ${result.player.id} in kingdom ${result.player.kingdom}.")
+            append("Processed ${result.redemptionResults.size} gift code(s) for ${result.player.name} (${result.player.id}) in kingdom ${result.player.kingdom}.")
             if (redeemed.isNotEmpty()) append(" Redeemed: ${redeemed.joinToString()}.")
             if (alreadyRedeemed.isNotEmpty()) append(" Already redeemed: ${alreadyRedeemed.joinToString()}.")
             if (invalid.isNotEmpty()) append(" Failed or invalid: ${invalid.joinToString()}.")

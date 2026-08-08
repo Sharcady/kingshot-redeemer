@@ -18,6 +18,7 @@ import org.openqa.selenium.WebElement
 import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.chrome.ChromeOptions
 import org.openqa.selenium.support.ui.WebDriverWait
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.time.Duration
 
@@ -59,7 +60,7 @@ class GiftCodeAdapter(
         return try {
             openRedeemPageAndFillPlayer(driver, player)
             giftCodes.filter { it.isNotBlank() }.map { giftCode ->
-                redeemGiftCode(driver, giftCode.trim())
+                redeemGiftCode(driver, player, giftCode.trim())
             }
         } catch (exception: GiftCodeRedeemingException) {
             throw exception
@@ -88,17 +89,27 @@ class GiftCodeAdapter(
         clickButton(driver, wait, "Continue")
     }
 
-    private fun redeemGiftCode(driver: WebDriver, giftCode: String): GiftCodeRedemptionResult {
+    private fun redeemGiftCode(driver: WebDriver, player: Player, giftCode: String): GiftCodeRedemptionResult {
         val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
         val giftCodeInput = wait.until { findGiftCodeInput(driver) }
         fillInput(driver, giftCodeInput, giftCode)
         clickRedeemGiftCodeButton(driver, wait)
         Thread.sleep(applicationConfiguration.kingshot.browser.redemptionResultSettleMillis)
         val message = waitForRedeemCompletion(driver, wait)
+        val status = message.toRedemptionStatus()
+        logger.info(
+            "Gift code {} redemption result for {} ({}) in kingdom {}: {} - {}",
+            giftCode,
+            player.name,
+            player.id,
+            player.kingdom,
+            status,
+            message,
+        )
 
         return GiftCodeRedemptionResult(
             giftCode = giftCode,
-            status = message.toRedemptionStatus(),
+            status = status,
             message = message,
         )
     }
@@ -280,6 +291,7 @@ class GiftCodeAdapter(
     )
 
     private companion object {
+        val logger = LoggerFactory.getLogger(GiftCodeAdapter::class.java)
         val GIFT_CODE_PATTERN = Regex("^[A-Za-z0-9][A-Za-z0-9_-]{2,}$")
         val NON_CODE_LINES = setOf("Active", "Copy", "Code", "Copy Code", "Sign", "In", "Redeem", "Share", "Link")
         const val GIFT_CODE_REDEEMED_SUCCESSFULLY = "Gift code redeemed successfully"

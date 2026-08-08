@@ -11,8 +11,8 @@ class RegisterAndRedeemGiftCodesUseCase(
     private val giftCodePort: GiftCodePort,
     private val playerRepositoryPort: PlayerRepositoryPort,
 ) {
-    fun execute(playerId: Long, kingdom: Long): RedeemGiftCodeResult {
-        val player = Player(playerId.toString(), kingdom)
+    fun execute(playerId: Long, kingdom: Long, name: String): RedeemGiftCodeResult {
+        val player = Player(id = playerId.toString(), kingdom = kingdom, name = name)
         playerRepositoryPort.save(player)
 
         val giftCodes = giftCodePort.findActiveGiftCodes()

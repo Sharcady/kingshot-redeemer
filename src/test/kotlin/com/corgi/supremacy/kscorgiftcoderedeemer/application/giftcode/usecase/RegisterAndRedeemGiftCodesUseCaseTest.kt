@@ -16,9 +16,9 @@ class RegisterAndRedeemGiftCodesUseCaseTest {
         val playerRepositoryPort = FakePlayerRepositoryPort()
         val useCase = RegisterAndRedeemGiftCodesUseCase(giftCodePort, playerRepositoryPort)
 
-        val result = useCase.execute(playerId = 202667117, kingdom = 1416)
+        val result = useCase.execute(playerId = 202667117, kingdom = 1416, name = "Arkadiy")
 
-        val expectedPlayer = Player(id = "202667117", kingdom = 1416)
+        val expectedPlayer = Player(id = "202667117", kingdom = 1416, name = "Arkadiy")
         assertEquals(expectedPlayer, playerRepositoryPort.savedPlayers.single())
         assertEquals(expectedPlayer, giftCodePort.redeemedPlayer)
         assertEquals(listOf("HAPPYCATDAY", "Kingshot888"), giftCodePort.redeemedGiftCodes)

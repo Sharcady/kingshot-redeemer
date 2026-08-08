@@ -14,10 +14,11 @@ class KingshotRedeemerScheduler(
     fun redeem() {
         val result = redeemGiftCodesForRegisteredPlayersUseCase.execute()
         logger.info(
-            "Redeemed {} gift code(s) for {} player(s). Failed player(s): {}",
+            "Redeemed {} gift code(s) for {} player(s): {}. Failed player(s): {}",
             result.giftCodes.size,
             result.redeemedPlayers.size,
-            result.failedPlayers.joinToString { it.id },
+            result.redeemedPlayers.joinToString { "${it.name} (${it.id})" },
+            result.failedPlayers.joinToString { "${it.name} (${it.id})" },
         )
     }
 
