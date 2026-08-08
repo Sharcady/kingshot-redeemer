@@ -1,20 +1,22 @@
 package com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.adapter
 
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodeRedeemingException
+import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodeRedemptionResult
+import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodeRedemptionStatus
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodesRetrievalException
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.Player
-import com.corgi.supremacy.kscorgiftcoderedeemer.domain.PlayerNotFoundException
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.GiftCodePort
 import com.corgi.supremacy.kscorgiftcoderedeemer.infrastructure.configuration.ApplicationConfiguration
 import org.openqa.selenium.By
+import org.openqa.selenium.ElementClickInterceptedException
 import org.openqa.selenium.JavascriptExecutor
 import org.openqa.selenium.NoSuchElementException
+import org.openqa.selenium.StaleElementReferenceException
 import org.openqa.selenium.TimeoutException
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.WebElement
 import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.chrome.ChromeOptions
-import org.openqa.selenium.support.ui.ExpectedConditions
 import org.openqa.selenium.support.ui.WebDriverWait
 import org.springframework.stereotype.Component
 import java.time.Duration
@@ -23,15 +25,6 @@ import java.time.Duration
 class GiftCodeAdapter(
     private val applicationConfiguration: ApplicationConfiguration,
 ) : GiftCodePort {
-
-    override fun findPlayerByIdAndKingdom(playerId: Long, kingdom: Long): Player {
-        val driver = createDriver()
-        return try {
-            openAndFindPlayer(driver, playerId, kingdom)
-        } finally {
-            driver.quit()
-        }
-    }
 
     override fun findActiveGiftCodes(): List<String> {
         val driver = createDriver()
@@ -55,30 +48,23 @@ class GiftCodeAdapter(
         } catch (exception: GiftCodesRetrievalException) {
             throw exception
         } catch (exception: RuntimeException) {
-            throw GiftCodesRetrievalException()
+            throw GiftCodesRetrievalException(exception)
         } finally {
             driver.quit()
         }
     }
 
-    override fun redeemGiftCodes(
-        playerId: Long,
-        kingdom: Long,
-        giftCodes: List<String>,
-        onPlayerFound: (Player) -> Unit,
-    ): Player {
+    override fun redeemGiftCodes(player: Player, giftCodes: List<String>): List<GiftCodeRedemptionResult> {
         val driver = createDriver()
         return try {
-            val player = openAndFindPlayer(driver, playerId, kingdom)
-            onPlayerFound(player)
-            giftCodes.filter { it.isNotBlank() }.forEach { giftCode ->
+            openRedeemPageAndFillPlayer(driver, player)
+            giftCodes.filter { it.isNotBlank() }.map { giftCode ->
                 redeemGiftCode(driver, giftCode.trim())
             }
-            player
-        } catch (exception: PlayerNotFoundException) {
+        } catch (exception: GiftCodeRedeemingException) {
             throw exception
         } catch (exception: RuntimeException) {
-            throw GiftCodeRedeemingException()
+            throw GiftCodeRedeemingException(cause = exception)
         } finally {
             driver.quit()
         }
@@ -93,29 +79,28 @@ class GiftCodeAdapter(
         return ChromeDriver(options)
     }
 
-    private fun openAndFindPlayer(driver: WebDriver, playerId: Long, kingdom: Long): Player {
+    private fun openRedeemPageAndFillPlayer(driver: WebDriver, player: Player) {
         val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
         driver.get(applicationConfiguration.kingshot.redeemUrl)
 
-        fillFirstVisibleInput(driver, wait, playerId.toString(), playerIdInputLocators())
-        fillFirstVisibleInput(driver, wait, kingdom.toString(), kingdomInputLocators())
-        val beforeLookupLines = bodyLines(driver)
-        clickButton(wait, "Continue")
-
-        return try {
-            wait.until { findGiftCodeInput(driver).isEnabled }
-            Player(playerId.toString(), findPlayerName(driver, beforeLookupLines, playerId, kingdom), kingdom)
-        } catch (exception: TimeoutException) {
-            throw PlayerNotFoundException(playerId, kingdom)
-        }
+        fillFirstVisibleInput(driver, wait, player.id, playerIdInputLocators())
+        fillFirstVisibleInput(driver, wait, player.kingdom.toString(), kingdomInputLocators())
+        clickButton(driver, wait, "Continue")
     }
 
-    private fun redeemGiftCode(driver: WebDriver, giftCode: String) {
+    private fun redeemGiftCode(driver: WebDriver, giftCode: String): GiftCodeRedemptionResult {
         val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
         val giftCodeInput = wait.until { findGiftCodeInput(driver) }
         giftCodeInput.clear()
         giftCodeInput.sendKeys(giftCode)
-        clickButton(wait, "Redeem Gift Code")
+        clickRedeemGiftCodeButton(driver, wait)
+        val message = waitForRedeemCompletion(driver, wait)
+
+        return GiftCodeRedemptionResult(
+            giftCode = giftCode,
+            status = message.toRedemptionStatus(),
+            message = message,
+        )
     }
 
     private fun fillFirstVisibleInput(driver: WebDriver, wait: WebDriverWait, value: String, locators: List<By>) {
@@ -128,43 +113,110 @@ class GiftCodeAdapter(
         input.sendKeys(value)
     }
 
-    private fun clickButton(wait: WebDriverWait, label: String) {
-        val button = wait.until(
-            ExpectedConditions.elementToBeClickable(
-                By.xpath("//button[normalize-space()='$label' or .//*[normalize-space()='$label']]")
-            )
+    private fun clickButton(driver: WebDriver, wait: WebDriverWait, label: String) {
+        val button = wait.until { findClickableButtonByText(driver, label) }
+        clickElement(driver, button)
+    }
+
+    private fun clickRedeemGiftCodeButton(driver: WebDriver, wait: WebDriverWait) {
+        val button = wait.until {
+            findClickableButtonByText(driver, "Redeem Gift Code")
+                ?: findRedeemButtonNearGiftCodeInput(driver)
+        }
+        clickElement(driver, button)
+    }
+
+    private fun findClickableButtonByText(driver: WebDriver, label: String): WebElement? {
+        driver.findElements(By.tagName("button")).forEach { button ->
+            try {
+                if (
+                    button.isDisplayed &&
+                    button.isEnabled &&
+                    button.text.normalized().contains(label.normalized(), ignoreCase = true)
+                ) {
+                    return button
+                }
+            } catch (exception: StaleElementReferenceException) {
+                return@forEach
+            }
+        }
+        return null
+    }
+
+    private fun findRedeemButtonNearGiftCodeInput(driver: WebDriver): WebElement? {
+        val giftCodeInput = findGiftCodeInput(driver)
+        val scriptResult = (driver as JavascriptExecutor).executeScript(
+            """
+            const input = arguments[0];
+            const container = input.closest('form') || input.parentElement;
+            if (!container) return null;
+            return [...container.querySelectorAll('button')]
+              .find(button => !button.disabled && button.offsetParent !== null)
+              || null;
+            """.trimIndent(),
+            giftCodeInput,
         )
-        button.click()
+
+        return scriptResult as? WebElement
+    }
+
+    private fun clickElement(driver: WebDriver, element: WebElement) {
+        (driver as JavascriptExecutor).executeScript("arguments[0].scrollIntoView({block: 'center'});", element)
+        try {
+            element.click()
+        } catch (exception: ElementClickInterceptedException) {
+            driver.executeScript("arguments[0].click();", element)
+        } catch (exception: StaleElementReferenceException) {
+            throw exception
+        }
     }
 
     private fun findGiftCodeInput(driver: WebDriver): WebElement =
-        driver.findElements(By.cssSelector("input[placeholder='Enter gift code'], input[name='giftCode'], input[id*='gift' i]"))
+        driver.findElements(By.cssSelector("input#giftCode, input[name='giftCode'], input[placeholder='Enter gift code'], input[id*='gift' i]"))
             .firstOrNull { it.isDisplayed }
             ?: throw NoSuchElementException("Gift code input was not found")
 
-    private fun findPlayerName(driver: WebDriver, beforeLookupLines: Set<String>, playerId: Long, kingdom: Long): String {
+    private fun waitForRedeemCompletion(driver: WebDriver, wait: WebDriverWait): String =
+        try {
+            wait.until {
+                val message = findRedeemResultMessage(driver)
+                message?.takeIf { it.isTerminalRedeemMessage() }
+            }
+        } catch (exception: TimeoutException) {
+            throw GiftCodeRedeemingException(
+                message = "Timed out waiting for gift code redemption result. Page text: ${driver.findElement(By.tagName("body")).text.normalized()}",
+                cause = exception,
+            )
+        }
+
+    private fun findRedeemResultMessage(driver: WebDriver): String? {
         val scriptResult = (driver as JavascriptExecutor).executeScript(
             """
-            const playerId = arguments[0];
-            const kingdom = arguments[1];
-            const beforeLookupLines = new Set(arguments[2]);
-            const values = [...document.querySelectorAll('body *')]
-              .map(e => (e.innerText || e.textContent || '').trim())
-              .filter(Boolean)
-              .flatMap(t => t.split('\n').map(line => line.trim()))
-              .filter(Boolean)
-              .filter(t => t.length <= 80)
-              .filter(t => !beforeLookupLines.has(t))
-              .filter(t => !['Player ID', 'Kingdom', 'Gift Code', 'Continue', 'Redeem Gift Code'].includes(t))
-              .filter(t => t !== playerId && t !== kingdom);
-            return values[0] || '';
+            const buttons = [...document.querySelectorAll('button')];
+            const redeemButton = buttons.find(button => button.innerText.trim() === 'Redeem Gift Code');
+            if (!redeemButton) return null;
+
+            const messages = [];
+            let element = redeemButton;
+            for (let i = 0; i < 8 && element; i++) {
+              element = element.nextElementSibling;
+              if (element && element.innerText && element.innerText.trim()) {
+                messages.push(...element.innerText.split('\n').map(line => line.trim()).filter(Boolean));
+              }
+            }
+
+            const parentText = redeemButton.parentElement?.innerText || '';
+            messages.push(...parentText.split('\n').map(line => line.trim()).filter(Boolean));
+
+            return messages.find(line =>
+              /gift code redeemed successfully/i.test(line) ||
+              /already redeemed this gift code/i.test(line) ||
+              /gift code not found or invalid/i.test(line)
+            ) || null;
             """.trimIndent(),
-            playerId.toString(),
-            kingdom.toString(),
-            beforeLookupLines.toList(),
         ) as? String
 
-        return scriptResult?.takeIf { it.isNotBlank() } ?: playerId.toString()
+        return scriptResult?.takeIf { it.isNotBlank() }
     }
 
     private fun bodyLines(driver: WebDriver): Set<String> =
@@ -176,6 +228,28 @@ class GiftCodeAdapter(
 
     private fun String.isGiftCodeLine(): Boolean =
         matches(GIFT_CODE_PATTERN) && this !in NON_CODE_LINES && !startsWith("Expires:")
+
+    private fun String.normalized(): String =
+        replace(Regex("\\s+"), " ").trim()
+
+    private fun String.isTerminalRedeemMessage(): Boolean {
+        val normalizedMessage = normalized()
+        return normalizedMessage.contains(GIFT_CODE_REDEEMED_SUCCESSFULLY, ignoreCase = true) ||
+            normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED, ignoreCase = true) ||
+            normalizedMessage.contains(GIFT_CODE_NOT_FOUND_OR_INVALID, ignoreCase = true)
+    }
+
+    private fun String.toRedemptionStatus(): GiftCodeRedemptionStatus {
+        val normalizedMessage = normalized()
+        return when {
+            normalizedMessage.contains(GIFT_CODE_REDEEMED_SUCCESSFULLY, ignoreCase = true) ->
+                GiftCodeRedemptionStatus.REDEEMED
+            normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED, ignoreCase = true) ->
+                GiftCodeRedemptionStatus.ALREADY_REDEEMED
+            else ->
+                GiftCodeRedemptionStatus.INVALID
+        }
+    }
 
     private fun playerIdInputLocators(): List<By> = listOf(
         By.cssSelector("input[placeholder='Enter your Player ID']"),
@@ -192,5 +266,8 @@ class GiftCodeAdapter(
     private companion object {
         val GIFT_CODE_PATTERN = Regex("^[A-Za-z0-9][A-Za-z0-9_-]{2,}$")
         val NON_CODE_LINES = setOf("Active", "Copy", "Code", "Copy Code", "Sign", "In", "Redeem", "Share", "Link")
+        const val GIFT_CODE_REDEEMED_SUCCESSFULLY = "Gift code redeemed successfully"
+        const val GIFT_CODE_ALREADY_REDEEMED = "already redeemed this gift code"
+        const val GIFT_CODE_NOT_FOUND_OR_INVALID = "gift code not found or invalid"
     }
 }

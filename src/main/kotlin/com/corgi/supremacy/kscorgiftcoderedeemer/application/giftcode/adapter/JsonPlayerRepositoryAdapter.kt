@@ -47,17 +47,23 @@ class JsonPlayerRepositoryAdapter(
     override fun findAll(): List<Player> =
         readPlayers(Path.of(applicationConfiguration.kingshot.playersDbPath))
 
-    private fun readPlayers(path: Path): List<Player> =
-        if (path.exists()) {
-            objectMapper.readValue(
-                path.toFile(),
-                objectMapper.typeFactory.constructCollectionType(List::class.java, Player::class.java),
-            )
-        } else {
-            emptyList()
-        }
+    private fun readPlayers(path: Path): List<Player> {
+        ensureFileExists(path)
+
+        return objectMapper.readValue(
+            path.toFile(),
+            objectMapper.typeFactory.constructCollectionType(List::class.java, Player::class.java),
+        )
+    }
 
     private fun ensureParentDirectoryExists(path: Path) {
         path.parent?.let { Files.createDirectories(it) }
+    }
+
+    private fun ensureFileExists(path: Path) {
+        ensureParentDirectoryExists(path)
+        if (!path.exists()) {
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), emptyList<Player>())
+        }
     }
 }

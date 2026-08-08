@@ -43,7 +43,7 @@ class ImageRepositoryAdapter(
                 content = Files.readAllBytes(image),
             )
         } catch (exception: RuntimeException) {
-            throw ImageRetrievalException()
+            throw ImageRetrievalException(exception)
         }
     }
 

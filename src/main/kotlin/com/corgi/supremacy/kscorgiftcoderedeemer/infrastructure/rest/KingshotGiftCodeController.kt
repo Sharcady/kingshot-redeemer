@@ -1,8 +1,10 @@
 package com.corgi.supremacy.kscorgiftcoderedeemer.infrastructure.rest
 
 import com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.usecase.ListPlayersUseCase
-import com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.usecase.RedeemGiftCodeUseCase
+import com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.usecase.RegisterAndRedeemGiftCodesUseCase
+import com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.usecase.RedeemGiftCodeResult
 import com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.usecase.RemovePlayerUseCase
+import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodeRedemptionStatus
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.Player
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.ImageRepositoryPort
 import com.corgi.supremacy.kscorgiftcoderedeemer.infrastructure.rest.dto.DiscordImageResponse
@@ -19,7 +21,7 @@ import java.util.Base64
 @RestController
 @RequestMapping("/kingshot")
 class KingshotGiftCodeController(
-    private val redeemGiftCodeUseCase: RedeemGiftCodeUseCase,
+    private val registerAndRedeemGiftCodesUseCase: RegisterAndRedeemGiftCodesUseCase,
     private val removePlayerUseCase: RemovePlayerUseCase,
     private val listPlayersUseCase: ListPlayersUseCase,
     private val imageRepositoryPort: ImageRepositoryPort,
@@ -46,14 +48,14 @@ class KingshotGiftCodeController(
         redeemAndBuildResponse(request.playerId, request.kingdom)
 
     private fun redeemAndBuildResponse(playerId: Long, kingdom: Long): RedeemGiftCodesResponse {
-        val result = redeemGiftCodeUseCase.execute(
+        val result = registerAndRedeemGiftCodesUseCase.execute(
             playerId = playerId,
             kingdom = kingdom,
         )
         val image = imageRepositoryPort.findRandom()
 
         return RedeemGiftCodesResponse(
-            message = "Redeemed ${result.redeemedGiftCodes.size} gift code(s) for ${result.player.name} (${result.player.id}) in kingdom ${result.player.kingdom}: ${result.redeemedGiftCodes.joinToString()}.",
+            message = buildRedeemMessage(result),
             image = image?.let {
                 DiscordImageResponse(
                     fileName = it.fileName,
@@ -62,5 +64,24 @@ class KingshotGiftCodeController(
                 )
             },
         )
+    }
+
+    private fun buildRedeemMessage(result: RedeemGiftCodeResult): String {
+        val redeemed = result.redemptionResults
+            .filter { it.status == GiftCodeRedemptionStatus.REDEEMED }
+            .map { it.giftCode }
+        val alreadyRedeemed = result.redemptionResults
+            .filter { it.status == GiftCodeRedemptionStatus.ALREADY_REDEEMED }
+            .map { it.giftCode }
+        val invalid = result.redemptionResults
+            .filter { it.status == GiftCodeRedemptionStatus.INVALID }
+            .map { it.giftCode }
+
+        return buildString {
+            append("Processed ${result.redemptionResults.size} gift code(s) for player ${result.player.id} in kingdom ${result.player.kingdom}.")
+            if (redeemed.isNotEmpty()) append(" Redeemed: ${redeemed.joinToString()}.")
+            if (alreadyRedeemed.isNotEmpty()) append(" Already redeemed: ${alreadyRedeemed.joinToString()}.")
+            if (invalid.isNotEmpty()) append(" Failed or invalid: ${invalid.joinToString()}.")
+        }
     }
 }

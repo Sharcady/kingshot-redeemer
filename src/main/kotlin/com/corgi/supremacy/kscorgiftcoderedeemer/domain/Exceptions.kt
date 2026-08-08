@@ -1,9 +1,14 @@
 package com.corgi.supremacy.kscorgiftcoderedeemer.domain
 
-class PlayerNotFoundException(playerId: Long, kingdom: Long): RuntimeException("Player $playerId kingdom $kingdom not found")
+class ImageRetrievalException(
+    cause: Throwable? = null,
+) : RuntimeException("Image retrieval failed", cause)
 
-class ImageRetrievalException: RuntimeException("Image retrieval failed")
+class GiftCodesRetrievalException(
+    cause: Throwable? = null,
+) : RuntimeException("GiftCode retrieval failed", cause)
 
-class GiftCodesRetrievalException: RuntimeException("GiftCode retrieval failed")
-
-class GiftCodeRedeemingException: RuntimeException("GiftCode redeeming failed")
+class GiftCodeRedeemingException(
+    message: String = "GiftCode redeeming failed",
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)

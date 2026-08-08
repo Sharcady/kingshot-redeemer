@@ -19,8 +19,7 @@ class RedeemGiftCodesForRegisteredPlayersUseCase(
         players.forEach { player ->
             try {
                 giftCodePort.redeemGiftCodes(
-                    playerId = player.id.toLong(),
-                    kingdom = player.kingdom,
+                    player = player,
                     giftCodes = giftCodes,
                 )
                 redeemedPlayers.add(player)

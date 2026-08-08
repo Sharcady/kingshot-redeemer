@@ -7,8 +7,7 @@ The application uses browser automation to interact with the Kingshot website:
 - reads active gift codes from `https://kingshot.net/gift-codes`
 - opens `https://kingshot.net/gift-codes/redeem`
 - fills Player ID and Kingdom
-- searches for the player
-- saves found players to a local JSON file
+- saves players to a local JSON file
 - redeems the active gift codes for that player
 - periodically repeats redemption for all saved players
 
@@ -91,13 +90,13 @@ If the image directory is empty, the response contains `"image": null`.
 GET /kingshot/register?playerId=123456789&kingdom=23
 ```
 
-This looks up the player on the Kingshot redeem page, saves the player to `players.json`, fetches current active gift codes, redeems them, and returns a Discord-friendly response.
+This saves the player to `players.json`, fetches current active gift codes, redeems them, and returns a Discord-friendly response.
 
 Example response:
 
 ```json
 {
-  "message": "Redeemed 3 gift code(s) for PlayerName (123456789) in kingdom 23: CODE1, CODE2, CODE3.",
+  "message": "Redeemed 3 gift code(s) for player 123456789 in kingdom 23: CODE1, CODE2, CODE3.",
   "image": {
     "fileName": "success.png",
     "mediaType": "image/png",
@@ -134,7 +133,6 @@ Example response:
 [
   {
     "id": "123456789",
-    "name": "PlayerName",
     "kingdom": 23
   }
 ]
