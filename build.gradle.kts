@@ -24,6 +24,7 @@ extra["springCloudVersion"] = "2025.1.2"
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
+    implementation("org.seleniumhq.selenium:selenium-java:4.45.0")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("tools.jackson.module:jackson-module-kotlin")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")

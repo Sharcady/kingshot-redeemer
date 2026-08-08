@@ -1,3 +1,12 @@
 spring:
   application:
     name: ks-corgift-code-redeemer
+
+kingshot:
+  redeem-url: https://kingshot.net/gift-codes/redeem
+  gift-codes-url: https://kingshot.net/gift-codes
+  players-db-path: data/players.json
+  images-path: data/images
+  browser:
+    headless: true
+    timeout-seconds: 30
