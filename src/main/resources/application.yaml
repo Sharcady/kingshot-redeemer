@@ -2,11 +2,19 @@ spring:
   application:
     name: ks-corgift-code-redeemer
 
-kingshot:
-  redeem-url: https://kingshot.net/gift-codes/redeem
-  gift-codes-url: https://kingshot.net/gift-codes
-  players-db-path: data/players.json
-  images-path: data/images
-  browser:
-    headless: true
-    timeout-seconds: 30
+server:
+  port: ${SERVER_PORT:8080}
+
+application:
+  kingshot:
+    base-url: ${KINGSHOT_BASE_URL:https://kingshot.net}
+    redeem-url: ${KINGSHOT_REDEEM_URL:https://kingshot.net/gift-codes/redeem}
+    gift-codes-url: ${KINGSHOT_GIFT_CODES_URL:https://kingshot.net/gift-codes}
+    players-db-path: ${KINGSHOT_PLAYERS_DB_PATH:data/players.json}
+    images-path: ${KINGSHOT_IMAGES_PATH:data/images}
+    scheduler:
+      # cron: ${KINGSHOT_REDEEMER_CRON:*/10 * * * * *}
+      cron: ${KINGSHOT_REDEEMER_CRON:0 0 */2 * * *}
+    browser:
+      headless: ${KINGSHOT_BROWSER_HEADLESS:true}
+      timeout-seconds: ${KINGSHOT_BROWSER_TIMEOUT_SECONDS:30}

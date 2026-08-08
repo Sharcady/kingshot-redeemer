@@ -3,7 +3,7 @@ package com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.adapter
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.Image
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.ImageRetrievalException
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.ImageRepositoryPort
-import org.springframework.beans.factory.annotation.Value
+import com.corgi.supremacy.kscorgiftcoderedeemer.infrastructure.configuration.ApplicationConfiguration
 import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Path
@@ -13,14 +13,13 @@ import kotlin.random.Random
 
 @Component
 class ImageRepositoryAdapter(
-    @Value("\${kingshot.images-path:data/images}")
-    private val imagesPath: String,
+    private val applicationConfiguration: ApplicationConfiguration,
 ) : ImageRepositoryPort {
 
     @Throws(ImageRetrievalException::class)
     override fun findRandom(): Image? {
         try {
-            val imagesDirectory = Path.of(imagesPath)
+            val imagesDirectory = Path.of(applicationConfiguration.kingshot.imagesPath)
             if (Files.notExists(imagesDirectory)) {
                 Files.createDirectories(imagesDirectory)
                 return null

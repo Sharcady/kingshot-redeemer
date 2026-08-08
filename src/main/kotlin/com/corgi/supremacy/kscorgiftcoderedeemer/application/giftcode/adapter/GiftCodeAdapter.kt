@@ -5,6 +5,7 @@ import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodesRetrievalExcept
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.Player
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.PlayerNotFoundException
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.GiftCodePort
+import com.corgi.supremacy.kscorgiftcoderedeemer.infrastructure.configuration.ApplicationConfiguration
 import org.openqa.selenium.By
 import org.openqa.selenium.JavascriptExecutor
 import org.openqa.selenium.NoSuchElementException
@@ -15,20 +16,12 @@ import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.chrome.ChromeOptions
 import org.openqa.selenium.support.ui.ExpectedConditions
 import org.openqa.selenium.support.ui.WebDriverWait
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.time.Duration
 
 @Component
 class GiftCodeAdapter(
-    @Value("\${kingshot.redeem-url:https://kingshot.net/gift-codes/redeem}")
-    private val redeemUrl: String,
-    @Value("\${kingshot.gift-codes-url:https://kingshot.net/gift-codes}")
-    private val giftCodesUrl: String,
-    @Value("\${kingshot.browser.headless:true}")
-    private val headless: Boolean,
-    @Value("\${kingshot.browser.timeout-seconds:30}")
-    private val timeoutSeconds: Long,
+    private val applicationConfiguration: ApplicationConfiguration,
 ) : GiftCodePort {
 
     override fun findPlayerByIdAndKingdom(playerId: Long, kingdom: Long): Player {
@@ -43,8 +36,8 @@ class GiftCodeAdapter(
     override fun findActiveGiftCodes(): List<String> {
         val driver = createDriver()
         return try {
-            val wait = WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds))
-            driver.get(giftCodesUrl)
+            val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
+            driver.get(applicationConfiguration.kingshot.giftCodesUrl)
             wait.until { bodyLines(driver).contains("Active Gift Codes") }
 
             val activeGiftCodes = bodyLines(driver)
@@ -93,7 +86,7 @@ class GiftCodeAdapter(
 
     private fun createDriver(): WebDriver {
         val options = ChromeOptions()
-        if (headless) {
+        if (applicationConfiguration.kingshot.browser.headless) {
             options.addArguments("--headless=new")
         }
         options.addArguments("--disable-gpu", "--no-sandbox", "--window-size=1440,1200")
@@ -101,8 +94,8 @@ class GiftCodeAdapter(
     }
 
     private fun openAndFindPlayer(driver: WebDriver, playerId: Long, kingdom: Long): Player {
-        val wait = WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds))
-        driver.get(redeemUrl)
+        val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
+        driver.get(applicationConfiguration.kingshot.redeemUrl)
 
         fillFirstVisibleInput(driver, wait, playerId.toString(), playerIdInputLocators())
         fillFirstVisibleInput(driver, wait, kingdom.toString(), kingdomInputLocators())
@@ -118,7 +111,7 @@ class GiftCodeAdapter(
     }
 
     private fun redeemGiftCode(driver: WebDriver, giftCode: String) {
-        val wait = WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds))
+        val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
         val giftCodeInput = wait.until { findGiftCodeInput(driver) }
         giftCodeInput.clear()
         giftCodeInput.sendKeys(giftCode)
