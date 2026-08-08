@@ -23,5 +23,6 @@ data class ApplicationConfiguration(
     data class Browser(
         val headless: Boolean = true,
         val timeoutSeconds: Long = 30,
+        val redemptionResultSettleMillis: Long = 1500,
     )
 }

@@ -18,3 +18,4 @@ application:
     browser:
       headless: ${KINGSHOT_BROWSER_HEADLESS:true}
       timeout-seconds: ${KINGSHOT_BROWSER_TIMEOUT_SECONDS:30}
+      redemption-result-settle-millis: ${KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS:1500}

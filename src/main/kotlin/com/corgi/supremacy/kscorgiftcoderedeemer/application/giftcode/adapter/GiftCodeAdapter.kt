@@ -91,9 +91,9 @@ class GiftCodeAdapter(
     private fun redeemGiftCode(driver: WebDriver, giftCode: String): GiftCodeRedemptionResult {
         val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
         val giftCodeInput = wait.until { findGiftCodeInput(driver) }
-        giftCodeInput.clear()
-        giftCodeInput.sendKeys(giftCode)
+        fillInput(driver, giftCodeInput, giftCode)
         clickRedeemGiftCodeButton(driver, wait)
+        Thread.sleep(applicationConfiguration.kingshot.browser.redemptionResultSettleMillis)
         val message = waitForRedeemCompletion(driver, wait)
 
         return GiftCodeRedemptionResult(
@@ -109,8 +109,24 @@ class GiftCodeAdapter(
                 .flatMap { locator -> driver.findElements(locator).asSequence() }
                 .firstOrNull { it.isDisplayed && it.isEnabled }
         }
-        input.clear()
-        input.sendKeys(value)
+        fillInput(driver, input, value)
+    }
+
+    private fun fillInput(driver: WebDriver, input: WebElement, value: String) {
+        (driver as JavascriptExecutor).executeScript(
+            """
+            const input = arguments[0];
+            const value = arguments[1];
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            nativeInputValueSetter.call(input, '');
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            nativeInputValueSetter.call(input, value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            """.trimIndent(),
+            input,
+            value,
+        )
     }
 
     private fun clickButton(driver: WebDriver, wait: WebDriverWait, label: String) {
