@@ -14,7 +14,7 @@ application:
     images-path: ${KINGSHOT_IMAGES_PATH:data/images}
     scheduler:
 #       cron: ${KINGSHOT_REDEEMER_CRON:*/10 * * * * *}
-      cron: ${KINGSHOT_REDEEMER_CRON:0 0 */2 * * *}
+      cron: ${KINGSHOT_REDEEMER_CRON:0 0 */6 * * *}
     browser:
       headless: ${KINGSHOT_BROWSER_HEADLESS:true}
       timeout-seconds: ${KINGSHOT_BROWSER_TIMEOUT_SECONDS:30}
