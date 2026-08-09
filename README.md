@@ -31,27 +31,89 @@ By default the app starts on port `8080`.
 SERVER_PORT=9090 ./gradlew bootRun
 ```
 
+## Docker
+
+Build the container image:
+
+```bash
+docker build -t kingshot-redeemer .
+```
+
+Run it locally:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -v "$(pwd)/data:/data" \
+  kingshot-redeemer
+```
+
+The image includes Google Chrome for Selenium browser automation. Runtime data is stored under `/data` in the container:
+
+- `/data/players.json`
+- `/data/images`
+
+## Deploy on Railway
+
+This repository is prepared for Railway with:
+
+- `Dockerfile` at the repository root
+- `railway.json` config-as-code that tells Railway to use the Dockerfile
+- `PORT` support in `application.yaml`
+
+To deploy:
+
+1. Push the repository to GitHub.
+2. In Railway, create a new project from the GitHub repository.
+3. Railway should detect and use the root `Dockerfile`.
+4. Open the service Networking settings and generate a public domain.
+5. Create and attach a Railway Volume to this service.
+6. Set the volume mount path to `/data`.
+
+Railway provides the `PORT` variable automatically. The app reads it with:
+
+```text
+server.port=${PORT:${SERVER_PORT:8080}}
+```
+
+When a Railway Volume is mounted, Railway provides `RAILWAY_VOLUME_MOUNT_PATH`. By default this app stores data under that path:
+
+- `${RAILWAY_VOLUME_MOUNT_PATH}/players.json`
+- `${RAILWAY_VOLUME_MOUNT_PATH}/images`
+
+If you mount the volume at `/data`, you do not need to set explicit file path variables. If you prefer explicit variables, set:
+
+```text
+KINGSHOT_PLAYERS_DB_PATH=/data/players.json
+KINGSHOT_IMAGES_PATH=/data/images
+KINGSHOT_BROWSER_HEADLESS=true
+KINGSHOT_REDEEMER_CRON="0 0 */2 * * *"
+KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS=1500
+```
+
+Railway volumes are available only at runtime, not during Docker build. The app creates `players.json` automatically if it is missing.
+
 ## Configuration
 
 Runtime settings are configured in `src/main/resources/application.yaml` under the `application` root:
 
 ```yaml
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${PORT:${SERVER_PORT:8080}}
 
 application:
   kingshot:
     base-url: ${KINGSHOT_BASE_URL:https://kingshot.net}
     redeem-url: ${KINGSHOT_REDEEM_URL:https://kingshot.net/gift-codes/redeem}
     gift-codes-url: ${KINGSHOT_GIFT_CODES_URL:https://kingshot.net/gift-codes}
-    players-db-path: ${KINGSHOT_PLAYERS_DB_PATH:data/players.json}
-    images-path: ${KINGSHOT_IMAGES_PATH:data/images}
+    players-db-path: ${KINGSHOT_PLAYERS_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:/data}/players.json}
+    images-path: ${KINGSHOT_IMAGES_PATH:${RAILWAY_VOLUME_MOUNT_PATH:/data}/images}
     scheduler:
       # cron: ${KINGSHOT_REDEEMER_CRON:*/10 * * * * *}
       cron: ${KINGSHOT_REDEEMER_CRON:0 0 */2 * * *}
     browser:
       headless: ${KINGSHOT_BROWSER_HEADLESS:true}
       timeout-seconds: ${KINGSHOT_BROWSER_TIMEOUT_SECONDS:30}
+      redemption-result-settle-millis: ${KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS:1500}
 ```
 
 To test the scheduler every 10 seconds, comment the 2-hour cron and uncomment the 10-second cron.
