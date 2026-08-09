@@ -32,7 +32,9 @@ class GiftCodeAdapter(
         return try {
             val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
             driver.get(applicationConfiguration.kingshot.giftCodesUrl)
-            wait.until { bodyLines(driver).contains("Active Gift Codes") }
+            waitUntil(driver, wait, "Active Gift Codes section") {
+                bodyLines(it).contains("Active Gift Codes")
+            }
 
             val activeGiftCodes = bodyLines(driver)
                 .dropWhile { it != "Active Gift Codes" }
@@ -84,14 +86,16 @@ class GiftCodeAdapter(
         val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
         driver.get(applicationConfiguration.kingshot.redeemUrl)
 
-        fillFirstVisibleInput(driver, wait, player.id, playerIdInputLocators())
-        fillFirstVisibleInput(driver, wait, player.kingdom.toString(), kingdomInputLocators())
+        fillFirstVisibleInput(driver, wait, "Player ID input", player.id, playerIdInputLocators())
+        fillFirstVisibleInput(driver, wait, "Kingdom input", player.kingdom.toString(), kingdomInputLocators())
         clickButton(driver, wait, "Continue")
     }
 
     private fun redeemGiftCode(driver: WebDriver, player: Player, giftCode: String): GiftCodeRedemptionResult {
         val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
-        val giftCodeInput = wait.until { findGiftCodeInput(driver) }
+        val giftCodeInput = waitUntil(driver, wait, "Gift code input") {
+            findGiftCodeInputOrNull(it)
+        }
         fillInput(driver, giftCodeInput, giftCode)
         clickRedeemGiftCodeButton(driver, wait)
         Thread.sleep(applicationConfiguration.kingshot.browser.redemptionResultSettleMillis)
@@ -114,10 +118,16 @@ class GiftCodeAdapter(
         )
     }
 
-    private fun fillFirstVisibleInput(driver: WebDriver, wait: WebDriverWait, value: String, locators: List<By>) {
-        val input = wait.until {
+    private fun fillFirstVisibleInput(
+        driver: WebDriver,
+        wait: WebDriverWait,
+        description: String,
+        value: String,
+        locators: List<By>,
+    ) {
+        val input = waitUntil(driver, wait, description) {
             locators.asSequence()
-                .flatMap { locator -> driver.findElements(locator).asSequence() }
+                .flatMap { locator -> it.findElements(locator).asSequence() }
                 .firstOrNull { it.isDisplayed && it.isEnabled }
         }
         fillInput(driver, input, value)
@@ -141,17 +151,34 @@ class GiftCodeAdapter(
     }
 
     private fun clickButton(driver: WebDriver, wait: WebDriverWait, label: String) {
-        val button = wait.until { findClickableButtonByText(driver, label) }
+        val button = waitUntil(driver, wait, "$label button") {
+            findClickableButtonByText(it, label)
+        }
         clickElement(driver, button)
     }
 
     private fun clickRedeemGiftCodeButton(driver: WebDriver, wait: WebDriverWait) {
-        val button = wait.until {
-            findClickableButtonByText(driver, "Redeem Gift Code")
-                ?: findRedeemButtonNearGiftCodeInput(driver)
+        val button = waitUntil(driver, wait, "Redeem Gift Code button") {
+            findClickableButtonByText(it, "Redeem Gift Code")
+                ?: findRedeemButtonNearGiftCodeInput(it)
         }
         clickElement(driver, button)
     }
+
+    private fun <T : Any> waitUntil(
+        driver: WebDriver,
+        wait: WebDriverWait,
+        description: String,
+        condition: (WebDriver) -> T?,
+    ): T =
+        try {
+            wait.until { condition(it) }
+        } catch (exception: TimeoutException) {
+            throw GiftCodeRedeemingException(
+                message = "Timed out waiting for $description. Current URL: ${driver.currentUrl}. Page title: ${driver.title}. Page text: ${pageText(driver)}",
+                cause = exception,
+            )
+        }
 
     private fun findClickableButtonByText(driver: WebDriver, label: String): WebElement? {
         driver.findElements(By.tagName("button")).forEach { button ->
@@ -199,9 +226,12 @@ class GiftCodeAdapter(
     }
 
     private fun findGiftCodeInput(driver: WebDriver): WebElement =
+        findGiftCodeInputOrNull(driver)
+            ?: throw NoSuchElementException("Gift code input was not found")
+
+    private fun findGiftCodeInputOrNull(driver: WebDriver): WebElement? =
         driver.findElements(By.cssSelector("input#giftCode, input[name='giftCode'], input[placeholder='Enter gift code'], input[id*='gift' i]"))
             .firstOrNull { it.isDisplayed }
-            ?: throw NoSuchElementException("Gift code input was not found")
 
     private fun waitForRedeemCompletion(driver: WebDriver, wait: WebDriverWait): String =
         try {
@@ -214,6 +244,13 @@ class GiftCodeAdapter(
                 message = "Timed out waiting for gift code redemption result. Page text: ${driver.findElement(By.tagName("body")).text.normalized()}",
                 cause = exception,
             )
+        }
+
+    private fun pageText(driver: WebDriver): String =
+        try {
+            driver.findElement(By.tagName("body")).text.normalized()
+        } catch (exception: RuntimeException) {
+            "<unavailable: ${exception.message}>"
         }
 
     private fun findRedeemResultMessage(driver: WebDriver): String? {
