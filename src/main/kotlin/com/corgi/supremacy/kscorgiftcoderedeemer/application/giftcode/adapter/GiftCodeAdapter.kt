@@ -76,7 +76,7 @@ class GiftCodeAdapter(
         if (applicationConfiguration.kingshot.browser.headless) {
             options.addArguments("--headless=new")
         }
-        options.addArguments("--disable-gpu", "--no-sandbox", "--window-size=1440,1200")
+        options.addArguments("--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox", "--window-size=1440,1200")
         return ChromeDriver(options)
     }
 
