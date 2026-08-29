@@ -24,7 +24,7 @@ class RedeemGiftCodesForPlayerUseCase(
             val results = giftCodePort.redeemGiftCodes(player, normalizedGiftCodes)
             recordResults(player, normalizedGiftCodes, results, isRetry)
             results
-        } catch (exception: RuntimeException) {
+        } catch (exception: Exception) {
             logger.error(
                 "Unable to redeem {} gift code(s) for player {} in kingdom {}. Retry: {}.",
                 normalizedGiftCodes.size,

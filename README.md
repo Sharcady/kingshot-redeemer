@@ -96,6 +96,7 @@ KINGSHOT_REGISTERED_PLAYERS_REDEMPTION_CRON="0 0 */6 * * *"
 KINGSHOT_ACTIVE_GIFT_CODES_RETRIEVAL_CRON="0 */30 * * * *"
 KINGSHOT_FAILED_GIFT_CODE_RETRY_CRON="0 0 * * * *"
 KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS=1500
+KINGSHOT_BROWSER_REDEMPTION_RESULT_TIMEOUT_SECONDS=15
 ```
 
 Railway volumes are available only at runtime, not during Docker build. The app creates `players.json` automatically if it is missing.
@@ -125,6 +126,7 @@ application:
     browser:
       headless: ${KINGSHOT_BROWSER_HEADLESS:true}
       timeout-seconds: ${KINGSHOT_BROWSER_TIMEOUT_SECONDS:30}
+      redemption-result-timeout-seconds: ${KINGSHOT_BROWSER_REDEMPTION_RESULT_TIMEOUT_SECONDS:15}
       redemption-result-settle-millis: ${KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS:1500}
 ```
 
@@ -235,17 +237,16 @@ Removed player 123456789.
 `KingshotRedeemerScheduler` runs on the configured cron schedule. On each run it:
 
 1. loads all players from `data/players.json`
-2. fetches active gift codes once from the Kingshot gift-codes page
+2. reads the active-code snapshot from `data/active_giftcodes.json`
 3. redeems that same list for every saved player
-4. updates `data/active_giftcodes.json`
-5. logs how many players succeeded and which players failed
+4. logs how many players succeeded and which players failed
 
 Two additional jobs are configured:
 
-- `ActiveGiftCodesRefreshScheduler` refreshes `active_giftcodes.json` without redeeming codes.
+- `ActiveGiftCodesRefreshScheduler` retrieves active codes from the website and replacement-syncs `active_giftcodes.json` without redeeming codes.
 - `FailedGiftCodeRedemptionRetryScheduler` retries failed `(player, gift code)` pairs up to 10 times.
 
-The registered-player scheduler retrieves codes only once per run; the controller follows the same sequence for a new player: retrieve codes, redeem them, then synchronize `active_giftcodes.json`.
+The registered-player scheduler never retrieves codes from the website; it uses the snapshot created by the retrieval job. The controller follows a separate sequence for a new player: retrieve codes, redeem them, then synchronize `active_giftcodes.json`.
 
 ## Test
 

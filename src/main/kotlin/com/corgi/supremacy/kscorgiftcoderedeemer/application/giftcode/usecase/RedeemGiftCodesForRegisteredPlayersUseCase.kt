@@ -16,13 +16,20 @@ class RedeemGiftCodesForRegisteredPlayersUseCase(
         val failedPlayers = mutableListOf<Player>()
 
         players.forEach { player ->
+            logger.info(
+                "Starting redemption of {} active gift code(s) for registered player {} in kingdom {}.",
+                giftCodes.size,
+                player.id,
+                player.kingdom,
+            )
             try {
                 redeemGiftCodesForPlayerUseCase.execute(
                     player = player,
                     giftCodes = giftCodes,
                 )
                 redeemedPlayers.add(player)
-            } catch (exception: RuntimeException) {
+                logger.info("Finished redemption for registered player {} in kingdom {}.", player.id, player.kingdom)
+            } catch (exception: Exception) {
                 logger.error("Unable to redeem gift codes for registered player {} in kingdom {}.", player.id, player.kingdom, exception)
                 failedPlayers.add(player)
             }

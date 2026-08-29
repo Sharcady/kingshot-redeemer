@@ -39,7 +39,7 @@ class RetryFailedGiftCodeRedemptionsUseCase(
                     .filter { it.status == GiftCodeRedemptionStatus.INVALID }
                     .map { it.giftCode }
                 failedPairs += failedRedemptions.filter { it.giftCode in failedGiftCodes }
-            } catch (exception: RuntimeException) {
+            } catch (exception: Exception) {
                 logger.error(
                     "Unable to retry {} gift code(s) for player {} in kingdom {}.",
                     failedRedemptions.size,

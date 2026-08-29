@@ -57,7 +57,7 @@ class GiftCodeAdapter(
         return try {
             openRedeemPageAndFillPlayer(driver, player)
             giftCodes.filter { it.isNotBlank() }.map { giftCode ->
-                redeemGiftCode(driver, player, giftCode.trim())
+                redeemGiftCodeSafely(driver, player, giftCode.trim())
             }
         } catch (exception: GiftCodeRedeemingException) {
             logger.error("Unable to redeem gift codes for player {} in kingdom {}.", player.id, player.kingdom, exception)
@@ -67,6 +67,34 @@ class GiftCodeAdapter(
             throw GiftCodeRedeemingException(cause = exception)
         } finally {
             driver.quit()
+        }
+    }
+
+    private fun redeemGiftCodeSafely(driver: WebDriver, player: Player, giftCode: String): GiftCodeRedemptionResult =
+        try {
+            redeemGiftCode(driver, player, giftCode)
+        } catch (exception: Exception) {
+            logger.error(
+                "Unable to redeem gift code {} for player {} in kingdom {}; continuing with the next code.",
+                giftCode,
+                player.id,
+                player.kingdom,
+                exception,
+            )
+            resetRedeemPage(driver, player)
+            GiftCodeRedemptionResult(
+                giftCode = giftCode,
+                status = GiftCodeRedemptionStatus.INVALID,
+                message = "Redemption failed: ${exception.message ?: exception.javaClass.simpleName}",
+            )
+        }
+
+    private fun resetRedeemPage(driver: WebDriver, player: Player) {
+        try {
+            logger.info("Resetting the redemption page for player {} in kingdom {} after a failed code.", player.id, player.kingdom)
+            openRedeemPageAndFillPlayer(driver, player)
+        } catch (exception: Exception) {
+            logger.error("Unable to reset the redemption page for player {} in kingdom {}.", player.id, player.kingdom, exception)
         }
     }
 
@@ -95,7 +123,11 @@ class GiftCodeAdapter(
         fillInput(driver, giftCodeInput, giftCode)
         clickRedeemGiftCodeButton(driver, wait)
         Thread.sleep(applicationConfiguration.kingshot.browser.redemptionResultSettleMillis)
-        val message = waitForRedeemCompletion(driver, wait)
+        val redemptionResultWait = WebDriverWait(
+            driver,
+            Duration.ofSeconds(applicationConfiguration.kingshot.browser.redemptionResultTimeoutSeconds),
+        )
+        val message = waitForRedeemCompletion(driver, redemptionResultWait)
         val status = message.toRedemptionStatus()
         dismissRedemptionResultModal(driver, wait)
         logger.info(
@@ -266,23 +298,11 @@ class GiftCodeAdapter(
               .find(element => element.offsetParent !== null);
             if (!modal) return null;
 
-            return modal.innerText
-              .split('\n')
-              .map(line => line.trim())
-              .find(line =>
-                /gift code redeemed successfully/i.test(line) ||
-                /redeemed successfully\. please check your mail for rewards!/i.test(line) ||
-                /already redeemed this gift code/i.test(line) ||
-                /gift has already been claimed!/i.test(line) ||
-                /same gift code type can only be redeemed once!/i.test(line) ||
-                /gift code not found or invalid/i.test(line) ||
-                /gift code not found!/i.test(line) ||
-                /redemption code error/i.test(line)
-              ) || null;
+            return modal.innerText || null;
             """.trimIndent(),
         ) as? String
 
-        return scriptResult?.takeIf { it.isNotBlank() }
+        return scriptResult?.normalized()?.takeIf { it.isNotBlank() }
     }
 
     private fun findGiftCodes(driver: WebDriver): List<String> =
@@ -316,24 +336,34 @@ class GiftCodeAdapter(
     private fun String.normalized(): String =
         replace(Regex("\\s+"), " ").trim()
 
-    private fun String.isTerminalRedeemMessage(): Boolean {
+    internal fun String.isTerminalRedeemMessage(): Boolean {
         val normalizedMessage = normalized()
         return normalizedMessage.contains(GIFT_CODE_REDEEMED_SUCCESSFULLY, ignoreCase = true) ||
             normalizedMessage.contains(REDEEMED_SUCCESSFULLY_CHECK_MAIL, ignoreCase = true) ||
+            normalizedMessage.contains(SERVER_BUSY_REWARDS_SENT_LATER, ignoreCase = true) ||
             normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED, ignoreCase = true) ||
             normalizedMessage.contains(GIFT_HAS_ALREADY_BEEN_CLAIMED, ignoreCase = true) ||
             normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED_ONCE, ignoreCase = true) ||
             normalizedMessage.contains(GIFT_CODE_NOT_FOUND_OR_INVALID, ignoreCase = true) ||
             normalizedMessage.contains(GIFT_CODE_NOT_FOUND, ignoreCase = true) ||
-            normalizedMessage.contains(REDEMPTION_CODE_ERROR, ignoreCase = true)
+            normalizedMessage.contains(REDEMPTION_CODE_ERROR, ignoreCase = true) ||
+            normalizedMessage.contains(PLAYER_ID_NOT_FOUND, ignoreCase = true) ||
+            normalizedMessage.contains(CHARACTER_INFO_INCORRECT, ignoreCase = true) ||
+            normalizedMessage.contains(CLAIM_LIMIT_EXCEEDED, ignoreCase = true) ||
+            normalizedMessage.contains(INSUFFICIENT_TOWN_CENTER_LEVEL, ignoreCase = true) ||
+            normalizedMessage.contains(PREREQUISITE_UNMET, ignoreCase = true) ||
+            normalizedMessage.contains(CODE_EXPIRED, ignoreCase = true) ||
+            normalizedMessage.contains(SERVER_BUSY_TRY_AGAIN_LATER, ignoreCase = true)
     }
 
-    private fun String.toRedemptionStatus(): GiftCodeRedemptionStatus {
+    internal fun String.toRedemptionStatus(): GiftCodeRedemptionStatus {
         val normalizedMessage = normalized()
         return when {
             normalizedMessage.contains(GIFT_CODE_REDEEMED_SUCCESSFULLY, ignoreCase = true) ->
                 GiftCodeRedemptionStatus.REDEEMED
             normalizedMessage.contains(REDEEMED_SUCCESSFULLY_CHECK_MAIL, ignoreCase = true) ->
+                GiftCodeRedemptionStatus.REDEEMED
+            normalizedMessage.contains(SERVER_BUSY_REWARDS_SENT_LATER, ignoreCase = true) ->
                 GiftCodeRedemptionStatus.REDEEMED
             normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED, ignoreCase = true) ||
                 normalizedMessage.contains(GIFT_HAS_ALREADY_BEEN_CLAIMED, ignoreCase = true) ||
@@ -370,5 +400,13 @@ class GiftCodeAdapter(
         const val GIFT_CODE_NOT_FOUND_OR_INVALID = "gift code not found or invalid"
         const val GIFT_CODE_NOT_FOUND = "Gift Code not found!"
         const val REDEMPTION_CODE_ERROR = "Redemption Code Error"
+        const val PLAYER_ID_NOT_FOUND = "Player ID not found!"
+        const val CHARACTER_INFO_INCORRECT = "Character info is incorrect. Please confirm and try again."
+        const val CLAIM_LIMIT_EXCEEDED = "Claim limit exceeded. Unable to claim."
+        const val INSUFFICIENT_TOWN_CENTER_LEVEL = "Insufficient Town Center Level. Unable to claim."
+        const val PREREQUISITE_UNMET = "Prerequisite unmet"
+        const val CODE_EXPIRED = "Expired, unable to claim."
+        const val SERVER_BUSY_REWARDS_SENT_LATER = "The server is busy. Rewards will be sent later. Please be patient."
+        const val SERVER_BUSY_TRY_AGAIN_LATER = "Server busy. Please try again later."
     }
 }
