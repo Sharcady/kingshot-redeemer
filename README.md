@@ -4,8 +4,8 @@ Small Spring Boot/Kotlin service for redeeming Kingshot gift codes for registere
 
 The application uses browser automation to interact with the Kingshot website:
 
-- reads active gift codes from `https://kingshot.net/gift-codes`
-- opens `https://kingshot.net/gift-codes/redeem`
+- reads active gift codes from `http://kingshotwiki.com/giftcodes/`
+- opens `https://ks-giftcode.centurygame.com/`
 - fills Player ID and Kingdom
 - saves players to a local JSON file
 - redeems the active gift codes for that player
@@ -43,14 +43,16 @@ Run it locally:
 
 ```bash
 docker run --rm -p 8080:8080 \
-  -v "$(pwd)/data:/data" \
+  -v "$(pwd)/data:/app/data" \
   kingshot-redeemer
 ```
 
-The image includes Google Chrome for Selenium browser automation. Runtime data is stored under `/data` in the container:
+The image includes Google Chrome for Selenium browser automation. Without a configured volume, runtime data is stored under `/app/data` in the container:
 
-- `/data/players.json`
-- `/data/images`
+- `/app/data/players.json`
+- `/app/data/active_giftcodes.json`
+- `/app/data/failed_giftcode_redemptions.json`
+- `/app/data/images`
 
 ## Deploy on Railway
 
@@ -75,18 +77,24 @@ Railway provides the `PORT` variable automatically. The app reads it with:
 server.port=${PORT:${SERVER_PORT:8080}}
 ```
 
-When a Railway Volume is mounted, Railway provides `RAILWAY_VOLUME_MOUNT_PATH`. By default this app stores data under that path:
+When a Railway Volume is mounted, Railway provides `RAILWAY_VOLUME_MOUNT_PATH`. The app automatically stores data under that path:
 
 - `${RAILWAY_VOLUME_MOUNT_PATH}/players.json`
+- `${RAILWAY_VOLUME_MOUNT_PATH}/active_giftcodes.json`
+- `${RAILWAY_VOLUME_MOUNT_PATH}/failed_giftcode_redemptions.json`
 - `${RAILWAY_VOLUME_MOUNT_PATH}/images`
 
-If you mount the volume at `/data`, you do not need to set explicit file path variables. If you prefer explicit variables, set:
+If you prefer explicit file path variables, set:
 
 ```text
 KINGSHOT_PLAYERS_DB_PATH=/data/players.json
+KINGSHOT_ACTIVE_GIFT_CODES_DB_PATH=/data/active_giftcodes.json
+KINGSHOT_FAILED_GIFT_CODE_REDEMPTIONS_DB_PATH=/data/failed_giftcode_redemptions.json
 KINGSHOT_IMAGES_PATH=/data/images
 KINGSHOT_BROWSER_HEADLESS=true
-KINGSHOT_REDEEMER_CRON="0 0 */2 * * *"
+KINGSHOT_REDEEMER_CRON="0 0 */6 * * *"
+KINGSHOT_ACTIVE_GIFT_CODES_REFRESH_CRON="0 */30 * * * *"
+KINGSHOT_FAILED_GIFT_CODE_RETRY_CRON="0 0 * * * *"
 KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS=1500
 ```
 
@@ -103,20 +111,24 @@ server:
 application:
   kingshot:
     base-url: ${KINGSHOT_BASE_URL:https://kingshot.net}
-    redeem-url: ${KINGSHOT_REDEEM_URL:https://kingshot.net/gift-codes/redeem}
-    gift-codes-url: ${KINGSHOT_GIFT_CODES_URL:https://kingshot.net/gift-codes}
-    players-db-path: ${KINGSHOT_PLAYERS_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:/data}/players.json}
-    images-path: ${KINGSHOT_IMAGES_PATH:${RAILWAY_VOLUME_MOUNT_PATH:/data}/images}
+    redeem-url: ${KINGSHOT_REDEEM_URL:https://ks-giftcode.centurygame.com/}
+    gift-codes-url: ${KINGSHOT_GIFT_CODES_URL:http://kingshotwiki.com/giftcodes/}
+    players-db-path: ${KINGSHOT_PLAYERS_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/players.json}
+    active-gift-codes-db-path: ${KINGSHOT_ACTIVE_GIFT_CODES_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/active_giftcodes.json}
+    failed-gift-code-redemptions-db-path: ${KINGSHOT_FAILED_GIFT_CODE_REDEMPTIONS_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/failed_giftcode_redemptions.json}
+    images-path: ${KINGSHOT_IMAGES_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/images}
     scheduler:
-      # cron: ${KINGSHOT_REDEEMER_CRON:*/10 * * * * *}
-      cron: ${KINGSHOT_REDEEMER_CRON:0 0 */2 * * *}
+      cron: ${KINGSHOT_REDEEMER_CRON:0 0 */6 * * *}
+      # cron: ${KINGSHOT_REDEEMER_CRON:*/10 * * * * *} # Manual debug schedule
+      active-gift-codes-refresh-cron: ${KINGSHOT_ACTIVE_GIFT_CODES_REFRESH_CRON:0 */30 * * * *}
+      failed-gift-code-retry-cron: ${KINGSHOT_FAILED_GIFT_CODE_RETRY_CRON:0 0 * * * *}
     browser:
       headless: ${KINGSHOT_BROWSER_HEADLESS:true}
       timeout-seconds: ${KINGSHOT_BROWSER_TIMEOUT_SECONDS:30}
       redemption-result-settle-millis: ${KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS:1500}
 ```
 
-To test the scheduler every 10 seconds, comment the 2-hour cron and uncomment the 10-second cron.
+The default schedules are: active-code refresh every 30 minutes, failed-pair retries every hour, and registered-player redemption every 6 hours. A commented 10-second redeemer cron is retained for manual debugging.
 
 ## Data Files
 
@@ -127,6 +139,8 @@ data/players.json
 ```
 
 Player IDs are unique. Saving a player with an existing ID replaces the existing entry.
+
+The currently active codes are replacement-synced to `data/active_giftcodes.json`: each successful retrieval writes the complete current list, so codes no longer reported by the source are removed. Failed `(player, gift code)` redemption pairs are stored in `data/failed_giftcode_redemptions.json`. The retry job only retries a pair while its code is still present in the active-code snapshot; stale pairs are removed. It makes at most 10 retry attempts for each eligible pair.
 
 Random response images are read from:
 
@@ -145,6 +159,8 @@ Supported image extensions:
 If the image directory is empty, the response contains `"image": null`.
 
 ## API
+
+Interactive Swagger UI is available at `http://localhost:8080/swagger-ui/index.html` when the service is running. The OpenAPI specification is available at `/v3/api-docs`.
 
 ### Register Player and Redeem Current Codes
 
@@ -219,17 +235,17 @@ Removed player 123456789.
 `KingshotRedeemerScheduler` runs on the configured cron schedule. On each run it:
 
 1. loads all players from `data/players.json`
-2. fetches active gift codes from the Kingshot gift-codes page
-3. redeems those codes for every saved player
-4. logs how many players succeeded and which players failed
+2. fetches active gift codes once from the Kingshot gift-codes page
+3. redeems that same list for every saved player
+4. updates `data/active_giftcodes.json`
+5. logs how many players succeeded and which players failed
 
-Default schedule:
+Two additional jobs are configured:
 
-```text
-0 0 */2 * * *
-```
+- `ActiveGiftCodesRefreshScheduler` refreshes `active_giftcodes.json` without redeeming codes.
+- `FailedGiftCodeRedemptionRetryScheduler` retries failed `(player, gift code)` pairs up to 10 times.
 
-That runs every 2 hours.
+The registered-player scheduler retrieves codes only once per run; the controller follows the same sequence for a new player: retrieve codes, redeem them, then synchronize `active_giftcodes.json`.
 
 ## Test
 

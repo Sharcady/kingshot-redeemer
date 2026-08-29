@@ -3,6 +3,9 @@ package com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.usecase
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodeRedemptionResult
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodeRedemptionStatus
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.Player
+import com.corgi.supremacy.kscorgiftcoderedeemer.domain.FailedGiftCodeRedemption
+import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.ActiveGiftCodeRepositoryPort
+import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.FailedGiftCodeRedemptionRepositoryPort
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.GiftCodePort
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.PlayerRepositoryPort
 import kotlin.test.Test
@@ -14,7 +17,14 @@ class RegisterAndRedeemGiftCodesUseCaseTest {
     fun `saves player and redeems active gift codes`() {
         val giftCodePort = FakeGiftCodePort()
         val playerRepositoryPort = FakePlayerRepositoryPort()
-        val useCase = RegisterAndRedeemGiftCodesUseCase(giftCodePort, playerRepositoryPort)
+        val activeGiftCodeRepositoryPort = FakeActiveGiftCodeRepositoryPort()
+        val failedGiftCodeRedemptionRepositoryPort = FakeFailedGiftCodeRedemptionRepositoryPort()
+        val useCase = RegisterAndRedeemGiftCodesUseCase(
+            playerRepositoryPort,
+            RetrieveActiveGiftCodesUseCase(giftCodePort),
+            RedeemGiftCodesForPlayerUseCase(giftCodePort, failedGiftCodeRedemptionRepositoryPort),
+            UpdateActiveGiftCodesUseCase(activeGiftCodeRepositoryPort),
+        )
 
         val result = useCase.execute(playerId = 202667117, kingdom = 1416, name = "Arkadiy")
 
@@ -22,6 +32,11 @@ class RegisterAndRedeemGiftCodesUseCaseTest {
         assertEquals(expectedPlayer, playerRepositoryPort.savedPlayers.single())
         assertEquals(expectedPlayer, giftCodePort.redeemedPlayer)
         assertEquals(listOf("HAPPYCATDAY", "Kingshot888"), giftCodePort.redeemedGiftCodes)
+        assertEquals(listOf("HAPPYCATDAY", "Kingshot888"), activeGiftCodeRepositoryPort.activeGiftCodes)
+        assertEquals(
+            listOf(FailedGiftCodeRedemption(expectedPlayer, "HAPPYCATDAY")),
+            failedGiftCodeRedemptionRepositoryPort.failedRedemptions,
+        )
         assertEquals(expectedPlayer, result.player)
         assertEquals(
             listOf(
@@ -61,5 +76,26 @@ class RegisterAndRedeemGiftCodesUseCaseTest {
 
         override fun findAll(): List<Player> =
             savedPlayers
+    }
+
+    private class FakeActiveGiftCodeRepositoryPort : ActiveGiftCodeRepositoryPort {
+        var activeGiftCodes: List<String> = emptyList()
+
+        override fun findActiveGiftCodes(): List<String>? = activeGiftCodes
+
+        override fun replaceActiveGiftCodes(giftCodes: List<String>) {
+            activeGiftCodes = giftCodes
+        }
+    }
+
+    private class FakeFailedGiftCodeRedemptionRepositoryPort : FailedGiftCodeRedemptionRepositoryPort {
+        var failedRedemptions: List<FailedGiftCodeRedemption> = emptyList()
+
+        override fun findAll(): List<FailedGiftCodeRedemption> =
+            failedRedemptions
+
+        override fun replaceAll(failedRedemptions: List<FailedGiftCodeRedemption>) {
+            this.failedRedemptions = failedRedemptions
+        }
     }
 }

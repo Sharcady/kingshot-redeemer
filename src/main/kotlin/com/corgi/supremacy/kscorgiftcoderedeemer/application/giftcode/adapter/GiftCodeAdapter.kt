@@ -32,16 +32,9 @@ class GiftCodeAdapter(
         return try {
             val wait = WebDriverWait(driver, Duration.ofSeconds(applicationConfiguration.kingshot.browser.timeoutSeconds))
             driver.get(applicationConfiguration.kingshot.giftCodesUrl)
-            waitUntil(driver, wait, "Active Gift Codes section") {
-                bodyLines(it).contains("Active Gift Codes")
+            val activeGiftCodes = waitUntil(driver, wait, "gift codes") {
+                findGiftCodes(it).takeIf { codes -> codes.isNotEmpty() }
             }
-
-            val activeGiftCodes = bodyLines(driver)
-                .dropWhile { it != "Active Gift Codes" }
-                .drop(1)
-                .takeWhile { it != "Expired Gift Codes" }
-                .filter { it.isGiftCodeLine() }
-                .distinct()
 
             if (activeGiftCodes.isEmpty()) {
                 throw GiftCodesRetrievalException()
@@ -88,7 +81,6 @@ class GiftCodeAdapter(
 
         fillFirstVisibleInput(driver, wait, "Player ID input", player.id, playerIdInputLocators())
         fillFirstVisibleInput(driver, wait, "Kingdom input", player.kingdom.toString(), kingdomInputLocators())
-        clickButton(driver, wait, "Continue")
     }
 
     private fun redeemGiftCode(driver: WebDriver, player: Player, giftCode: String): GiftCodeRedemptionResult {
@@ -101,6 +93,7 @@ class GiftCodeAdapter(
         Thread.sleep(applicationConfiguration.kingshot.browser.redemptionResultSettleMillis)
         val message = waitForRedeemCompletion(driver, wait)
         val status = message.toRedemptionStatus()
+        dismissRedemptionResultModal(driver, wait)
         logger.info(
             "Gift code {} redemption result for {} ({}) in kingdom {}: {} - {}",
             giftCode,
@@ -150,19 +143,22 @@ class GiftCodeAdapter(
         )
     }
 
-    private fun clickButton(driver: WebDriver, wait: WebDriverWait, label: String) {
-        val button = waitUntil(driver, wait, "$label button") {
-            findClickableButtonByText(it, label)
+    private fun clickRedeemGiftCodeButton(driver: WebDriver, wait: WebDriverWait) {
+        val button = waitUntil(driver, wait, "redemption confirmation button") {
+            it.findElements(By.cssSelector(".exchange_btn:not(.disabled)"))
+                .firstOrNull { element -> element.isDisplayed && element.isEnabled }
+                ?: findClickableButtonByText(it, "Redeem Gift Code")
+                ?: findRedeemButtonNearGiftCodeInput(it)
         }
         clickElement(driver, button)
     }
 
-    private fun clickRedeemGiftCodeButton(driver: WebDriver, wait: WebDriverWait) {
-        val button = waitUntil(driver, wait, "Redeem Gift Code button") {
-            findClickableButtonByText(it, "Redeem Gift Code")
-                ?: findRedeemButtonNearGiftCodeInput(it)
+    private fun dismissRedemptionResultModal(driver: WebDriver, wait: WebDriverWait) {
+        val confirmationButton = waitUntil(driver, wait, "redemption result modal confirmation button") {
+            it.findElements(By.cssSelector(".modal_content .confirm_btn"))
+                .firstOrNull { element -> element.isDisplayed && element.isEnabled }
         }
-        clickElement(driver, button)
+        clickElement(driver, confirmationButton)
     }
 
     private fun <T : Any> waitUntil(
@@ -230,7 +226,7 @@ class GiftCodeAdapter(
             ?: throw NoSuchElementException("Gift code input was not found")
 
     private fun findGiftCodeInputOrNull(driver: WebDriver): WebElement? =
-        driver.findElements(By.cssSelector("input#giftCode, input[name='giftCode'], input[placeholder='Enter gift code'], input[id*='gift' i]"))
+        driver.findElements(By.cssSelector("input#giftCode, input[name='giftCode'], input[placeholder='Enter gift code'], .code_con input, input[id*='gift' i]"))
             .firstOrNull { it.isDisplayed }
 
     private fun waitForRedeemCompletion(driver: WebDriver, wait: WebDriverWait): String =
@@ -256,39 +252,53 @@ class GiftCodeAdapter(
     private fun findRedeemResultMessage(driver: WebDriver): String? {
         val scriptResult = (driver as JavascriptExecutor).executeScript(
             """
-            const buttons = [...document.querySelectorAll('button')];
-            const redeemButton = buttons.find(button => button.innerText.trim() === 'Redeem Gift Code');
-            if (!redeemButton) return null;
+            const modal = [...document.querySelectorAll('.modal_content')]
+              .find(element => element.offsetParent !== null);
+            if (!modal) return null;
 
-            const messages = [];
-            let element = redeemButton;
-            for (let i = 0; i < 8 && element; i++) {
-              element = element.nextElementSibling;
-              if (element && element.innerText && element.innerText.trim()) {
-                messages.push(...element.innerText.split('\n').map(line => line.trim()).filter(Boolean));
-              }
-            }
-
-            const parentText = redeemButton.parentElement?.innerText || '';
-            messages.push(...parentText.split('\n').map(line => line.trim()).filter(Boolean));
-
-            return messages.find(line =>
-              /gift code redeemed successfully/i.test(line) ||
-              /already redeemed this gift code/i.test(line) ||
-              /gift code not found or invalid/i.test(line)
-            ) || null;
+            return modal.innerText
+              .split('\n')
+              .map(line => line.trim())
+              .find(line =>
+                /gift code redeemed successfully/i.test(line) ||
+                /redeemed successfully\. please check your mail for rewards!/i.test(line) ||
+                /already redeemed this gift code/i.test(line) ||
+                /gift has already been claimed!/i.test(line) ||
+                /same gift code type can only be redeemed once!/i.test(line) ||
+                /gift code not found or invalid/i.test(line) ||
+                /gift code not found!/i.test(line) ||
+                /redemption code error/i.test(line)
+              ) || null;
             """.trimIndent(),
         ) as? String
 
         return scriptResult?.takeIf { it.isNotBlank() }
     }
 
-    private fun bodyLines(driver: WebDriver): Set<String> =
-        driver.findElement(By.tagName("body")).text
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .toSet()
+    private fun findGiftCodes(driver: WebDriver): List<String> =
+        driver.findElements(By.cssSelector(".code"))
+            .asSequence()
+            .map { it.text.trim() }
+            .plus(findConciergeGiftCodes(driver).asSequence())
+            .filter { it.isGiftCodeLine() }
+            .distinct()
+            .toList()
+
+    private fun findConciergeGiftCodes(driver: WebDriver): List<String> =
+        ((driver as JavascriptExecutor).executeScript(
+            """
+            const conciergeHeading = [...document.querySelectorAll('p')]
+              .find(element => /\bconcierge\b/i.test(element.innerText));
+            const conciergeList = conciergeHeading?.nextElementSibling;
+            if (conciergeList?.tagName !== 'UL') return [];
+
+            return [...conciergeList.querySelectorAll(':scope > li')]
+              .map(item => (item.querySelector('.code')?.innerText || item.innerText).trim())
+              .filter(Boolean);
+            """.trimIndent(),
+        ) as? List<*>)
+            ?.filterIsInstance<String>()
+            ?: emptyList()
 
     private fun String.isGiftCodeLine(): Boolean =
         matches(GIFT_CODE_PATTERN) && this !in NON_CODE_LINES && !startsWith("Expires:")
@@ -299,8 +309,13 @@ class GiftCodeAdapter(
     private fun String.isTerminalRedeemMessage(): Boolean {
         val normalizedMessage = normalized()
         return normalizedMessage.contains(GIFT_CODE_REDEEMED_SUCCESSFULLY, ignoreCase = true) ||
+            normalizedMessage.contains(REDEEMED_SUCCESSFULLY_CHECK_MAIL, ignoreCase = true) ||
             normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED, ignoreCase = true) ||
-            normalizedMessage.contains(GIFT_CODE_NOT_FOUND_OR_INVALID, ignoreCase = true)
+            normalizedMessage.contains(GIFT_HAS_ALREADY_BEEN_CLAIMED, ignoreCase = true) ||
+            normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED_ONCE, ignoreCase = true) ||
+            normalizedMessage.contains(GIFT_CODE_NOT_FOUND_OR_INVALID, ignoreCase = true) ||
+            normalizedMessage.contains(GIFT_CODE_NOT_FOUND, ignoreCase = true) ||
+            normalizedMessage.contains(REDEMPTION_CODE_ERROR, ignoreCase = true)
     }
 
     private fun String.toRedemptionStatus(): GiftCodeRedemptionStatus {
@@ -308,7 +323,11 @@ class GiftCodeAdapter(
         return when {
             normalizedMessage.contains(GIFT_CODE_REDEEMED_SUCCESSFULLY, ignoreCase = true) ->
                 GiftCodeRedemptionStatus.REDEEMED
-            normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED, ignoreCase = true) ->
+            normalizedMessage.contains(REDEEMED_SUCCESSFULLY_CHECK_MAIL, ignoreCase = true) ->
+                GiftCodeRedemptionStatus.REDEEMED
+            normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED, ignoreCase = true) ||
+                normalizedMessage.contains(GIFT_HAS_ALREADY_BEEN_CLAIMED, ignoreCase = true) ||
+                normalizedMessage.contains(GIFT_CODE_ALREADY_REDEEMED_ONCE, ignoreCase = true) ->
                 GiftCodeRedemptionStatus.ALREADY_REDEEMED
             else ->
                 GiftCodeRedemptionStatus.INVALID
@@ -316,12 +335,14 @@ class GiftCodeAdapter(
     }
 
     private fun playerIdInputLocators(): List<By> = listOf(
+        By.cssSelector("input[placeholder='Player ID']"),
         By.cssSelector("input[placeholder='Enter your Player ID']"),
         By.cssSelector("input[name='playerId']"),
         By.cssSelector("input[id*='player' i]"),
     )
 
     private fun kingdomInputLocators(): List<By> = listOf(
+        By.cssSelector("input[placeholder='Kingdom']"),
         By.cssSelector("input[placeholder='Your kingdom number (e.g. 23)']"),
         By.cssSelector("input[name='kingdom']"),
         By.cssSelector("input[id*='kingdom' i]"),
@@ -332,7 +353,12 @@ class GiftCodeAdapter(
         val GIFT_CODE_PATTERN = Regex("^[A-Za-z0-9][A-Za-z0-9_-]{2,}$")
         val NON_CODE_LINES = setOf("Active", "Copy", "Code", "Copy Code", "Sign", "In", "Redeem", "Share", "Link")
         const val GIFT_CODE_REDEEMED_SUCCESSFULLY = "Gift code redeemed successfully"
+        const val REDEEMED_SUCCESSFULLY_CHECK_MAIL = "Redeemed successfully. Please check your mail for rewards!"
         const val GIFT_CODE_ALREADY_REDEEMED = "already redeemed this gift code"
+        const val GIFT_HAS_ALREADY_BEEN_CLAIMED = "Gift has already been claimed!"
+        const val GIFT_CODE_ALREADY_REDEEMED_ONCE = "The same Gift Code type can only be redeemed once!"
         const val GIFT_CODE_NOT_FOUND_OR_INVALID = "gift code not found or invalid"
+        const val GIFT_CODE_NOT_FOUND = "Gift Code not found!"
+        const val REDEMPTION_CODE_ERROR = "Redemption Code Error"
     }
 }
