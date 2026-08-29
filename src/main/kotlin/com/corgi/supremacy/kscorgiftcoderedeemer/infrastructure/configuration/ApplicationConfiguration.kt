@@ -19,8 +19,8 @@ data class ApplicationConfiguration(
     )
 
     data class Scheduler(
-        val cron: String = "0 0 */6 * * *",
-        val activeGiftCodesRefreshCron: String = "0 */30 * * * *",
+        val registeredPlayersRedemptionCron: String = "0 0 */6 * * *",
+        val activeGiftCodesRetrievalCron: String = "0 */30 * * * *",
         val failedGiftCodeRetryCron: String = "0 0 * * * *",
     )
 

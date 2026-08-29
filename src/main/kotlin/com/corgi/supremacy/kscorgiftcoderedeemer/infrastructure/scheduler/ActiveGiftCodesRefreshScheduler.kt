@@ -12,7 +12,7 @@ class ActiveGiftCodesRefreshScheduler(
     private val updateActiveGiftCodesUseCase: UpdateActiveGiftCodesUseCase,
 ) {
 
-    @Scheduled(cron = "\${application.kingshot.scheduler.active-gift-codes-refresh-cron}")
+    @Scheduled(cron = "\${application.kingshot.scheduler.active-gift-codes-retrieval-cron}")
     fun refresh() {
         val giftCodes = retrieveActiveGiftCodesUseCase.execute()
         updateActiveGiftCodesUseCase.execute(giftCodes)

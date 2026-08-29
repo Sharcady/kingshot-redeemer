@@ -14,7 +14,7 @@ class KingshotRedeemerScheduler(
     private val updateActiveGiftCodesUseCase: UpdateActiveGiftCodesUseCase,
 ) {
 
-    @Scheduled(cron = "\${application.kingshot.scheduler.cron}")
+    @Scheduled(cron = "\${application.kingshot.scheduler.registered-players-redemption-cron}")
     fun redeem() {
         val giftCodes = retrieveActiveGiftCodesUseCase.execute()
         val result = try {

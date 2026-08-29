@@ -92,8 +92,8 @@ KINGSHOT_ACTIVE_GIFT_CODES_DB_PATH=/data/active_giftcodes.json
 KINGSHOT_FAILED_GIFT_CODE_REDEMPTIONS_DB_PATH=/data/failed_giftcode_redemptions.json
 KINGSHOT_IMAGES_PATH=/data/images
 KINGSHOT_BROWSER_HEADLESS=true
-KINGSHOT_REDEEMER_CRON="0 0 */6 * * *"
-KINGSHOT_ACTIVE_GIFT_CODES_REFRESH_CRON="0 */30 * * * *"
+KINGSHOT_REGISTERED_PLAYERS_REDEMPTION_CRON="0 0 */6 * * *"
+KINGSHOT_ACTIVE_GIFT_CODES_RETRIEVAL_CRON="0 */30 * * * *"
 KINGSHOT_FAILED_GIFT_CODE_RETRY_CRON="0 0 * * * *"
 KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS=1500
 ```
@@ -118,9 +118,9 @@ application:
     failed-gift-code-redemptions-db-path: ${KINGSHOT_FAILED_GIFT_CODE_REDEMPTIONS_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/failed_giftcode_redemptions.json}
     images-path: ${KINGSHOT_IMAGES_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/images}
     scheduler:
-      cron: ${KINGSHOT_REDEEMER_CRON:0 0 */6 * * *}
-      # cron: ${KINGSHOT_REDEEMER_CRON:*/10 * * * * *} # Manual debug schedule
-      active-gift-codes-refresh-cron: ${KINGSHOT_ACTIVE_GIFT_CODES_REFRESH_CRON:0 */30 * * * *}
+      registered-players-redemption-cron: ${KINGSHOT_REGISTERED_PLAYERS_REDEMPTION_CRON:0 0 */6 * * *}
+      # registered-players-redemption-cron: ${KINGSHOT_REGISTERED_PLAYERS_REDEMPTION_CRON:*/10 * * * * *} # Manual debug schedule
+      active-gift-codes-retrieval-cron: ${KINGSHOT_ACTIVE_GIFT_CODES_RETRIEVAL_CRON:0 */30 * * * *}
       failed-gift-code-retry-cron: ${KINGSHOT_FAILED_GIFT_CODE_RETRY_CRON:0 0 * * * *}
     browser:
       headless: ${KINGSHOT_BROWSER_HEADLESS:true}
