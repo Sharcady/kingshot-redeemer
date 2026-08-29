@@ -42,8 +42,10 @@ class GiftCodeAdapter(
 
             activeGiftCodes
         } catch (exception: GiftCodesRetrievalException) {
+            logger.error("Unable to retrieve active gift codes.", exception)
             throw exception
         } catch (exception: RuntimeException) {
+            logger.error("Unexpected error while retrieving active gift codes.", exception)
             throw GiftCodesRetrievalException(exception)
         } finally {
             driver.quit()
@@ -58,8 +60,10 @@ class GiftCodeAdapter(
                 redeemGiftCode(driver, player, giftCode.trim())
             }
         } catch (exception: GiftCodeRedeemingException) {
+            logger.error("Unable to redeem gift codes for player {} in kingdom {}.", player.id, player.kingdom, exception)
             throw exception
         } catch (exception: RuntimeException) {
+            logger.error("Unexpected error while redeeming gift codes for player {} in kingdom {}.", player.id, player.kingdom, exception)
             throw GiftCodeRedeemingException(cause = exception)
         } finally {
             driver.quit()
@@ -170,6 +174,7 @@ class GiftCodeAdapter(
         try {
             wait.until { condition(it) }
         } catch (exception: TimeoutException) {
+            logger.error("Timed out waiting for {}.", description, exception)
             throw GiftCodeRedeemingException(
                 message = "Timed out waiting for $description. Current URL: ${driver.currentUrl}. Page title: ${driver.title}. Page text: ${pageText(driver)}",
                 cause = exception,
@@ -187,6 +192,7 @@ class GiftCodeAdapter(
                     return button
                 }
             } catch (exception: StaleElementReferenceException) {
+                logger.debug("Ignoring a stale button while searching for {}.", label, exception)
                 return@forEach
             }
         }
@@ -215,8 +221,10 @@ class GiftCodeAdapter(
         try {
             element.click()
         } catch (exception: ElementClickInterceptedException) {
+            logger.warn("Element click was intercepted; retrying with JavaScript.", exception)
             driver.executeScript("arguments[0].click();", element)
         } catch (exception: StaleElementReferenceException) {
+            logger.error("Element became stale while clicking it.", exception)
             throw exception
         }
     }
@@ -236,6 +244,7 @@ class GiftCodeAdapter(
                 message?.takeIf { it.isTerminalRedeemMessage() }
             }
         } catch (exception: TimeoutException) {
+            logger.error("Timed out waiting for the gift-code redemption result.", exception)
             throw GiftCodeRedeemingException(
                 message = "Timed out waiting for gift code redemption result. Page text: ${driver.findElement(By.tagName("body")).text.normalized()}",
                 cause = exception,
@@ -246,6 +255,7 @@ class GiftCodeAdapter(
         try {
             driver.findElement(By.tagName("body")).text.normalized()
         } catch (exception: RuntimeException) {
+            logger.warn("Unable to read page text while handling a browser error.", exception)
             "<unavailable: ${exception.message}>"
         }
 

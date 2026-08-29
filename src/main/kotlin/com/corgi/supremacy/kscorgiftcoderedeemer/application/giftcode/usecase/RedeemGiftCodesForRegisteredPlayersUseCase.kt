@@ -2,6 +2,7 @@ package com.corgi.supremacy.kscorgiftcoderedeemer.application.giftcode.usecase
 
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.Player
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.PlayerRepositoryPort
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
@@ -22,6 +23,7 @@ class RedeemGiftCodesForRegisteredPlayersUseCase(
                 )
                 redeemedPlayers.add(player)
             } catch (exception: RuntimeException) {
+                logger.error("Unable to redeem gift codes for registered player {} in kingdom {}.", player.id, player.kingdom, exception)
                 failedPlayers.add(player)
             }
         }
@@ -33,6 +35,8 @@ class RedeemGiftCodesForRegisteredPlayersUseCase(
         )
     }
 }
+
+private val logger = LoggerFactory.getLogger(RedeemGiftCodesForRegisteredPlayersUseCase::class.java)
 
 data class RegisteredPlayersRedeemResult(
     val giftCodes: List<String>,

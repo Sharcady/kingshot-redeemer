@@ -6,6 +6,7 @@ import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodeRedemptionStatus
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.Player
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.FailedGiftCodeRedemptionRepositoryPort
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.GiftCodePort
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
@@ -24,6 +25,14 @@ class RedeemGiftCodesForPlayerUseCase(
             recordResults(player, normalizedGiftCodes, results, isRetry)
             results
         } catch (exception: RuntimeException) {
+            logger.error(
+                "Unable to redeem {} gift code(s) for player {} in kingdom {}. Retry: {}.",
+                normalizedGiftCodes.size,
+                player.id,
+                player.kingdom,
+                isRetry,
+                exception,
+            )
             recordFailures(player, normalizedGiftCodes, isRetry)
             throw exception
         }
@@ -84,4 +93,8 @@ class RedeemGiftCodesForPlayerUseCase(
 
     private fun FailedGiftCodeRedemption.belongsTo(player: Player): Boolean =
         this.player.id == player.id && this.player.kingdom == player.kingdom
+
+    private companion object {
+        val logger = LoggerFactory.getLogger(RedeemGiftCodesForPlayerUseCase::class.java)
+    }
 }

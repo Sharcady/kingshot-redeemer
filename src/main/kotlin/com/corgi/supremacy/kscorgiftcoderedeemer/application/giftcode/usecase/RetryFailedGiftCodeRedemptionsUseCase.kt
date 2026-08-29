@@ -4,6 +4,7 @@ import com.corgi.supremacy.kscorgiftcoderedeemer.domain.FailedGiftCodeRedemption
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.GiftCodeRedemptionStatus
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.ActiveGiftCodeRepositoryPort
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.FailedGiftCodeRedemptionRepositoryPort
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
@@ -39,6 +40,13 @@ class RetryFailedGiftCodeRedemptionsUseCase(
                     .map { it.giftCode }
                 failedPairs += failedRedemptions.filter { it.giftCode in failedGiftCodes }
             } catch (exception: RuntimeException) {
+                logger.error(
+                    "Unable to retry {} gift code(s) for player {} in kingdom {}.",
+                    failedRedemptions.size,
+                    player.id,
+                    player.kingdom,
+                    exception,
+                )
                 failedPairs += failedRedemptions
             }
         }
@@ -51,6 +59,7 @@ class RetryFailedGiftCodeRedemptionsUseCase(
     }
 
     private companion object {
+        val logger = LoggerFactory.getLogger(RetryFailedGiftCodeRedemptionsUseCase::class.java)
         const val MAX_RETRY_ATTEMPTS = 10
     }
 }
