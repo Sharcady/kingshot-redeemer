@@ -26,7 +26,7 @@ COPY --from=build /workspace/build/libs/*.jar app.jar
 
 ENV KINGSHOT_BROWSER_HEADLESS=true
 
-RUN mkdir -p /data/images
+RUN mkdir -p data/images
 
 EXPOSE 8080
 

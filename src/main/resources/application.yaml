@@ -8,14 +8,19 @@ server:
 application:
   kingshot:
     base-url: ${KINGSHOT_BASE_URL:https://kingshot.net}
-    redeem-url: ${KINGSHOT_REDEEM_URL:https://kingshot.net/gift-codes/redeem}
-    gift-codes-url: ${KINGSHOT_GIFT_CODES_URL:https://kingshot.net/gift-codes}
-    players-db-path: ${KINGSHOT_PLAYERS_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:/data}/players.json}
-    images-path: ${KINGSHOT_IMAGES_PATH:${RAILWAY_VOLUME_MOUNT_PATH:/data}/images}
+    redeem-url: ${KINGSHOT_REDEEM_URL:https://ks-giftcode.centurygame.com/}
+    gift-codes-url: ${KINGSHOT_GIFT_CODES_URL:http://kingshotwiki.com/giftcodes/}
+    players-db-path: ${KINGSHOT_PLAYERS_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/players.json}
+    active-gift-codes-db-path: ${KINGSHOT_ACTIVE_GIFT_CODES_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/active_giftcodes.json}
+    failed-gift-code-redemptions-db-path: ${KINGSHOT_FAILED_GIFT_CODE_REDEMPTIONS_DB_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/failed_giftcode_redemptions.json}
+    images-path: ${KINGSHOT_IMAGES_PATH:${RAILWAY_VOLUME_MOUNT_PATH:data}/images}
     scheduler:
-      # cron: ${KINGSHOT_REDEEMER_CRON:*/10 * * * * *}
-      cron: ${KINGSHOT_REDEEMER_CRON:0 0 */6 * * *}
+#      registered-players-redemption-cron: ${KINGSHOT_REGISTERED_PLAYERS_REDEMPTION_CRON:0 0 */6 * * *}
+      registered-players-redemption-cron: ${KINGSHOT_REGISTERED_PLAYERS_REDEMPTION_CRON:*/10 * * * * *} # Manual debug schedule
+      active-gift-codes-retrieval-cron: ${KINGSHOT_ACTIVE_GIFT_CODES_RETRIEVAL_CRON:0 */30 * * * *}
+      failed-gift-code-retry-cron: ${KINGSHOT_FAILED_GIFT_CODE_RETRY_CRON:0 0 * * * *}
     browser:
       headless: ${KINGSHOT_BROWSER_HEADLESS:true}
       timeout-seconds: ${KINGSHOT_BROWSER_TIMEOUT_SECONDS:60}
+      redemption-result-timeout-seconds: ${KINGSHOT_BROWSER_REDEMPTION_RESULT_TIMEOUT_SECONDS:15}
       redemption-result-settle-millis: ${KINGSHOT_BROWSER_REDEMPTION_RESULT_SETTLE_MILLIS:1500}

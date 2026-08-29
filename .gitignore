@@ -39,3 +39,5 @@ out/
 ### Kotlin ###
 .kotlin
 /data/players.json
+/data/active_giftcodes.json
+/data/failed_giftcode_redemptions.json

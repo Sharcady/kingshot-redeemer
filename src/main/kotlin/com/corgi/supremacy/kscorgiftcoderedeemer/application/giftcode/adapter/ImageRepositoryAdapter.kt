@@ -4,6 +4,7 @@ import com.corgi.supremacy.kscorgiftcoderedeemer.domain.Image
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.ImageRetrievalException
 import com.corgi.supremacy.kscorgiftcoderedeemer.domain.port.ImageRepositoryPort
 import com.corgi.supremacy.kscorgiftcoderedeemer.infrastructure.configuration.ApplicationConfiguration
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Path
@@ -43,6 +44,7 @@ class ImageRepositoryAdapter(
                 content = Files.readAllBytes(image),
             )
         } catch (exception: RuntimeException) {
+            logger.error("Unable to retrieve a random response image.", exception)
             throw ImageRetrievalException(exception)
         }
     }
@@ -56,6 +58,7 @@ class ImageRepositoryAdapter(
         }
 
     private companion object {
+        val logger = LoggerFactory.getLogger(ImageRepositoryAdapter::class.java)
         val SUPPORTED_EXTENSIONS = setOf("png", "jpg", "jpeg", "gif", "webp")
     }
 }

@@ -44,8 +44,10 @@ class JsonPlayerRepositoryAdapter(
         return true
     }
 
-    override fun findAll(): List<Player> =
-        readPlayers(Path.of(applicationConfiguration.kingshot.playersDbPath))
+    override fun findAll(): List<Player> {
+        val path = Path.of(applicationConfiguration.kingshot.playersDbPath)
+        return if (path.exists()) readPlayers(path) else emptyList()
+    }
 
     private fun readPlayers(path: Path): List<Player> {
         ensureFileExists(path)
